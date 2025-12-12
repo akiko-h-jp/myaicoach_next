@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     name: c.name,
     dailyLimitHours: c.dailyLimitHours,
     weekendHolidayHours: c.weekendHolidayHours,
-    priority: c.tasks?.length ? undefined : undefined, // priorityはCategoryには今スキーマ上ないので未設定
+    // priorityはCategoryには今スキーマ上ないので未設定（オプショナルなので省略可能）
   }));
 
   const start = startOfDay(new Date());
