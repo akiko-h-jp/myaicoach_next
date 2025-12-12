@@ -40,6 +40,11 @@ export default function SettingsPage() {
         return;
       }
       const token = session.access_token;
+      if (!token || typeof token !== "string") {
+        setError("トークンの取得に失敗しました。再度ログインしてください。");
+        router.replace("/login");
+        return;
+      }
       setAccessToken(token);
       await fetchCategories(token);
       await fetchUserSetting(token);
