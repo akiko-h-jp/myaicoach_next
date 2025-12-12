@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   });
 
   const inputTasks: ScheduleInputTask[] = tasks
-    .map((t) => {
+    .map((t): ScheduleInputTask | null => {
       const remaining =
         t.estimatedHours != null
           ? Math.max(0, t.estimatedHours * (1 - (t.progress ?? 0) / 100))
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         progress: t.progress ?? 0,
       };
     })
-    .filter((x): x is ScheduleInputTask => !!x);
+    .filter((x): x is ScheduleInputTask => x !== null);
 
   if (inputTasks.length === 0) {
     // 既存のスケジュールだけ消して終わり
