@@ -75,7 +75,6 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const id = typeof body?.id === "string" ? body.id : "";
-  const done = typeof body?.done === "boolean" ? body.done : null; // legacy
   const statusStr =
     typeof body?.status === "string" && body.status in TaskStatus ? body.status : null;
   const status = statusStr ? (statusStr as TaskStatus) : null;
@@ -97,7 +96,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   const data: Record<string, unknown> = {};
-  if (done !== null) data.done = done;
   if (status !== null) data.status = status;
   if (progress !== null) data.progress = progress;
   if (categoryId !== undefined) data.categoryId = categoryId;

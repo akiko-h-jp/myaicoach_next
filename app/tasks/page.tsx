@@ -7,7 +7,6 @@ import { supabaseBrowserClient } from "@/lib/supabase-client";
 type Task = {
   id: string;
   title: string;
-  done: boolean;
   status: "TODO" | "DONE";
   priority: "HIGH" | "MEDIUM" | "LOW" | "NONE";
   description?: string | null;
@@ -222,7 +221,6 @@ export default function TasksPage() {
       body: JSON.stringify({
         id: task.id,
         status: task.status === "DONE" ? "TODO" : "DONE",
-        done: !task.done,
       }),
     });
     if (!res.ok) {

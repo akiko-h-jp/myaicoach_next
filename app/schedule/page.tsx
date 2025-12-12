@@ -61,7 +61,7 @@ export default function SchedulePage() {
       return;
     }
     const json = await res.json();
-    setEntries(json.schedules ?? json.schedules ?? json.schedules?.schedules ?? []);
+    setEntries(json.schedules ?? []);
   };
 
   const handleRun = async () => {

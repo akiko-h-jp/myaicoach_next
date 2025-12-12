@@ -82,10 +82,10 @@ function endOfDay(date: Date) {
   return d;
 }
 
-// "YYYY-MM-DD" を JST の日付として解釈し、UTCのDateを生成
-function parseDateJst(dateStr: string) {
+// "YYYY-MM-DD" を JST の日付として解釈
+function parseDateJst(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map((v) => Number(v));
-  // JST: +9時間 → UTCの時刻を引く
-  return new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
+  // JSTの日付として解釈（ローカル時間でDateを作成）
+  return new Date(y, m - 1, d);
 }
 
