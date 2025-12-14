@@ -1,7 +1,24 @@
-const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const lineUserId = process.env.LINE_USER_ID;
-const lineEndpoint =
-  process.env.LINE_PUSH_ENDPOINT ?? "https://api.line.me/v2/bot/message/push";
+// 環境変数をクリーンアップ（改行、コメント、余分な文字を削除）
+function cleanEnvVar(value: string | undefined): string {
+  if (!value) return "";
+  // 改行を削除
+  let cleaned = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // 最初の行のみを取得（改行で分割）
+  cleaned = cleaned.split("\n")[0];
+  // # 以降のコメントを削除
+  cleaned = cleaned.split("#")[0];
+  // 前後の空白を削除
+  cleaned = cleaned.trim();
+  return cleaned;
+}
+
+const lineTokenRaw = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const lineUserIdRaw = process.env.LINE_USER_ID;
+const lineEndpointRaw = process.env.LINE_PUSH_ENDPOINT;
+
+const lineToken = cleanEnvVar(lineTokenRaw);
+const lineUserId = cleanEnvVar(lineUserIdRaw);
+const lineEndpoint = cleanEnvVar(lineEndpointRaw) || "https://api.line.me/v2/bot/message/push";
 
 export async function sendLineNotification(message: string) {
   console.log("📤 Attempting to send LINE notification...");
