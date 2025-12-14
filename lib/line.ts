@@ -4,18 +4,23 @@ const lineEndpoint =
   process.env.LINE_PUSH_ENDPOINT ?? "https://api.line.me/v2/bot/message/push";
 
 export async function sendLineNotification(message: string) {
+  console.log("📤 Attempting to send LINE notification...");
+  
   if (!lineToken) {
+    console.error("❌ LINE_CHANNEL_ACCESS_TOKEN is not set");
     return { ok: false, error: "LINE_CHANNEL_ACCESS_TOKEN is not set." };
   }
   if (!lineUserId) {
+    console.error("❌ LINE_USER_ID is not set");
     return { ok: false, error: "LINE_USER_ID is not set." };
   }
   if (!message) {
+    console.error("❌ Message is empty");
     return { ok: false, error: "Message is empty." };
   }
 
   const payload = {
-    to: lineUserId,
+    to: lineUserId.trim(),
     messages: [
       {
         type: "text",
@@ -23,6 +28,13 @@ export async function sendLineNotification(message: string) {
       },
     ],
   };
+
+  console.log("📤 LINE notification payload:", {
+    endpoint: lineEndpoint,
+    userId: lineUserId.trim().substring(0, 10) + "...",
+    messageLength: message.length,
+    hasToken: !!lineToken,
+  });
 
   try {
     const res = await fetch(lineEndpoint, {
@@ -33,13 +45,31 @@ export async function sendLineNotification(message: string) {
       },
       body: JSON.stringify(payload),
     });
+    
+    const responseText = await res.text();
+    console.log("📥 LINE API response:", {
+      status: res.status,
+      statusText: res.statusText,
+      body: responseText.substring(0, 200),
+    });
+    
     if (!res.ok) {
-      const text = await res.text();
-      return { ok: false, error: `LINE push failed: ${res.status} ${text}` };
+      console.error("❌ LINE push failed:", {
+        status: res.status,
+        statusText: res.statusText,
+        body: responseText,
+      });
+      return { ok: false, error: `LINE push failed: ${res.status} ${responseText}` };
     }
+    
+    console.log("✅ LINE notification sent successfully");
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: String(e) };
+    console.error("❌ LINE notification error:", {
+      message: e.message,
+      stack: e.stack,
+    });
+    return { ok: false, error: `LINE notification error: ${e.message}` };
   }
 }
 

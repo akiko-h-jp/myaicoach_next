@@ -54,13 +54,19 @@ export async function POST(req: NextRequest) {
 
   let lineResult: { ok: boolean; error?: string } | null = null;
   if (sendLine) {
+    console.log("📤 Sending LINE notification...");
     lineResult = await sendLineNotification(message);
     if (lineResult.ok) {
       await prisma.lineMessage.update({
         where: { id: lineMsg.id },
         data: { sentAt: new Date() },
       });
+      console.log("✅ LINE notification sent and saved");
+    } else {
+      console.error("❌ LINE notification failed:", lineResult.error);
     }
+  } else {
+    console.log("⏭️  LINE notification skipped (sendLine=false)");
   }
 
   return NextResponse.json({
