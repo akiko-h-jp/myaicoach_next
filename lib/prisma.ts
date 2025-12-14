@@ -2,12 +2,36 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const connectionString = process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   const error = new Error("DATABASE_URL is not set. Please check your environment variables.");
   console.error("❌ Prisma initialization error:", error.message);
   throw error;
 }
+
+// 接続文字列を正規化（前後の空白を削除）
+connectionString = connectionString.trim();
+
+// DATABASE_URLにsslmodeが含まれていない場合、追加
+// SupabaseのPostgreSQL接続にはSSLが必須
+if (!connectionString.includes("sslmode=")) {
+  // 既存のクエリパラメータがあるかチェック
+  const separator = connectionString.includes("?") ? "&" : "?";
+  connectionString = `${connectionString}${separator}sslmode=require`;
+  console.log("🔧 Added sslmode=require to DATABASE_URL");
+}
+
+// 接続文字列の形式を検証
+if (!connectionString.startsWith("postgresql://") && !connectionString.startsWith("postgres://")) {
+  console.error("❌ Invalid DATABASE_URL format. Expected postgresql:// or postgres://");
+  throw new Error("DATABASE_URL must start with postgresql:// or postgres://");
+}
+
+console.log("🔍 DATABASE_URL format check:", {
+  hasSslMode: connectionString.includes("sslmode="),
+  startsWithPostgres: connectionString.startsWith("postgres"),
+  hostPreview: connectionString.match(/@([^:]+)/)?.[1] || "unknown",
+});
 
 // サーバーレス環境での接続プール管理を改善
 // Vercelなどのサーバーレス環境では、グローバル変数を使用して接続を再利用
@@ -33,16 +57,27 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
       connectionString,
       max: 1, // サーバーレス環境では接続数を最小限に
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      connectionTimeoutMillis: 20000, // タイムアウトを延長（20秒）
+      // SSL設定を明示的に指定（Supabaseでは必須）
+      ssl: {
+        rejectUnauthorized: false, // Supabaseの証明書を信頼
+      },
     };
     
-    // DATABASE_URLにssl設定が含まれていない場合、追加
-    if (!connectionString.includes("sslmode=")) {
-      poolConfig.ssl = { rejectUnauthorized: false };
-    }
+    console.log("🔌 Creating database connection pool with SSL enabled");
     
     pool = new Pool(poolConfig);
     adapter = new PrismaPg(pool);
+    
+    // 接続をテスト
+    pool.query("SELECT 1")
+      .then(() => {
+        console.log("✅ Database connection test successful");
+      })
+      .catch((err: any) => {
+        console.error("❌ Database connection test failed:", err.message);
+        console.error("Connection string host:", connectionString.match(/@([^:]+)/)?.[1] || "unknown");
+      });
     
     // グローバル変数に保存（再利用のため）
     globalForPrisma.pool = pool;
