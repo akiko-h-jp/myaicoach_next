@@ -80,6 +80,7 @@ export async function sendLineNotification(message: string) {
       message: e.message,
       name: e.name,
       code: e.code,
+      stack: e.stack,
     };
     
     if (e.name === "AbortError") {
@@ -90,7 +91,16 @@ export async function sendLineNotification(message: string) {
       errorDetails.cause = e.cause;
     }
     
-    console.error("❌ LINE notification error:", errorDetails);
+    // 環境変数の状態もログに記録（機密情報は除く）
+    errorDetails.envCheck = {
+      hasToken: !!lineToken,
+      hasUserId: !!lineUserId,
+      tokenLength: lineToken?.length || 0,
+      userIdLength: lineUserId?.length || 0,
+      endpoint: lineEndpoint,
+    };
+    
+    console.error("❌ LINE notification error (full details):", JSON.stringify(errorDetails, null, 2));
     
     // より詳細なエラーメッセージを返す
     let errorMessage = `LINE notification error: ${e.message}`;
@@ -99,7 +109,9 @@ export async function sendLineNotification(message: string) {
     } else if (e.code === "ENOTFOUND" || e.code === "ECONNREFUSED") {
       errorMessage = `LINE notification error: Cannot connect to LINE API (${e.code}). Please check network settings.`;
     } else if (e.message?.includes("fetch failed")) {
-      errorMessage = `LINE notification error: Network error (${e.message}). This may be due to Vercel's network restrictions or LINE API connectivity issues.`;
+      // fetch failed エラーの詳細を確認
+      const errorInfo = e.cause ? ` (cause: ${JSON.stringify(e.cause)})` : "";
+      errorMessage = `LINE notification error: Network error (${e.message}${errorInfo}). This may be due to Vercel's network restrictions or LINE API connectivity issues. Please check Vercel's environment variables for LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID.`;
     }
     
     return { ok: false, error: errorMessage };
