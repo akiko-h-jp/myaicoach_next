@@ -90,16 +90,28 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
       console.error("❌ Unexpected error on idle database client:", err);
     });
     
-    // 接続をテスト（非同期、エラーはログのみ）
-    pool.query("SELECT 1")
-      .then(() => {
-        console.log("✅ Database connection test successful");
-      })
-      .catch((err: any) => {
-        console.error("❌ Database connection test failed:", err.message);
-        console.error("Error code:", err.code);
-        console.error("Connection string host:", connectionString.match(/@([^:]+)/)?.[1] || "unknown");
-      });
+    // ビルド時（静的生成時）には接続テストを実行しない
+    // Vercelのビルド環境では、データベースへの接続ができない場合がある（特にIPv6接続）
+    // ランタイム（APIリクエスト時）にのみ接続が確立される
+    const isBuildTime = process.env.NEXT_PHASE === "phase-production-build" || 
+                        process.env.NEXT_PHASE === "phase-development";
+    
+    if (!isBuildTime) {
+      // ランタイム時のみ接続をテスト（非同期、エラーはログのみ）
+      // 実際のAPIリクエスト時に接続が確立される
+      pool.query("SELECT 1")
+        .then(() => {
+          console.log("✅ Database connection test successful");
+        })
+        .catch((err: any) => {
+          // ビルド時のエラーは無視（ランタイムで再試行される）
+          if (err.code !== "ENETUNREACH") {
+            console.error("❌ Database connection test failed:", err.message);
+            console.error("Error code:", err.code);
+            console.error("Connection string host:", connectionString.match(/@([^:]+)/)?.[1] || "unknown");
+          }
+        });
+    }
   } catch (error: any) {
     console.error("❌ Failed to create Prisma adapter:", error.message);
     throw new Error(`Failed to initialize database connection: ${error.message}`);
