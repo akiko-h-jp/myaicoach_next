@@ -39,9 +39,24 @@ const getEnvVarSafe = (key: string): string => {
 const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKeyRaw = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// クリーンアップ処理
-const supabaseUrl = supabaseUrlRaw ? getEnvVarSafe("NEXT_PUBLIC_SUPABASE_URL") : "";
-const supabaseAnonKey = supabaseAnonKeyRaw ? getEnvVarSafe("NEXT_PUBLIC_SUPABASE_ANON_KEY") : "";
+// クリーンアップ処理（直接値をクリーンアップ、getEnvVarSafeは使わない）
+const cleanValue = (value: string | undefined): string => {
+  if (!value) return "";
+  // 改行、空白、余分な文字を削除
+  const cleaned = value.trim().split(/\s+/)[0].split("\n")[0].split("\r")[0];
+  // NEXTAUTH_URLなどの環境変数が混入していないか確認
+  if (cleaned.includes("NEXTAUTH_URL") || (cleaned.includes("=") && !cleaned.startsWith("http"))) {
+    // 等号が含まれている場合は、等号より前の部分のみを取得（URLの場合は除く）
+    const beforeEquals = cleaned.split("=")[0];
+    if (beforeEquals.length > 0 && beforeEquals !== cleaned && !cleaned.startsWith("http")) {
+      return beforeEquals;
+    }
+  }
+  return cleaned;
+};
+
+const supabaseUrl = cleanValue(supabaseUrlRaw);
+const supabaseAnonKey = cleanValue(supabaseAnonKeyRaw);
 
 // デバッグ用: 環境変数が読み込まれているか確認（常に表示）
 if (typeof window !== "undefined") {
