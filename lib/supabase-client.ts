@@ -59,16 +59,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
 let browserClient: SupabaseClient | null = null;
 
 export const supabaseBrowserClient = (): SupabaseClient => {
-  // 環境変数が設定されていない場合でも、ダミークライアントを返してアプリがクラッシュしないようにする
+  // 環境変数が設定されていない場合の処理
   if (!supabaseUrl || !supabaseAnonKey) {
+    if (typeof window !== "undefined") {
+      console.error("⚠️ Supabase environment variables are not configured.");
+      console.error("Missing:", {
+        url: !supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : null,
+        key: !supabaseAnonKey ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : null,
+      });
+      console.error("Please check Vercel environment variables settings:");
+      console.error("1. Go to Vercel Dashboard → Settings → Environment Variables");
+      console.error("2. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      console.error("3. Make sure they are set for Production environment");
+      console.error("4. Redeploy with cache cleared");
+    }
+    
     // ダミーのURLとキーでクライアントを作成（実際のAPI呼び出しは失敗するが、アプリはクラッシュしない）
     const dummyUrl = "https://placeholder.supabase.co";
     const dummyKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
-    
-    if (typeof window !== "undefined") {
-      console.error("⚠️ Supabase environment variables are not configured. Using dummy client.");
-      console.error("Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel settings.");
-    }
     
     if (!browserClient) {
       browserClient = createClient(dummyUrl, dummyKey, {

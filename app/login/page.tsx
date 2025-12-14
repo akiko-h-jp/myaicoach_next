@@ -18,11 +18,25 @@ export default function LoginPage() {
     setLoading(true);
     setMessage("");
     try {
+      // 環境変数が設定されているか確認（クライアント側では直接process.envは使えないため、supabaseクライアントの状態で判断）
+      // ダミークライアントが使われている場合、URLがplaceholderになる
+      const clientUrl = (supabase as any).supabaseUrl || "";
+      if (clientUrl.includes("placeholder")) {
+        setMessage("環境変数が設定されていません。Vercelの環境変数設定（NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY）を確認し、再デプロイしてください。");
+        setLoading(false);
+        return;
+      }
+
       // 既存のセッションをクリア
       await supabase.auth.signOut();
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setMessage(`ログインに失敗しました: ${error.message}`);
+        // エラーメッセージをより詳細に
+        if (error.message.includes("Load failed") || error.message.includes("fetch")) {
+          setMessage("Supabaseへの接続に失敗しました。環境変数（NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY）が正しく設定されているか確認してください。");
+        } else {
+          setMessage(`ログインに失敗しました: ${error.message}`);
+        }
         setLoading(false);
         return;
       }
