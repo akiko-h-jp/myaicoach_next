@@ -13,9 +13,20 @@ export const NavBar = () => {
 
   useEffect(() => {
     const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setEmail(data.session?.user.email ?? null);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Session fetch error:", error);
+          setEmail(null);
+        } else {
+          setEmail(data.session?.user.email ?? null);
+        }
+      } catch (e) {
+        console.error("Failed to fetch session:", e);
+        setEmail(null);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchSession();
   }, [supabase]);

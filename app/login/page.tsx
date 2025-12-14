@@ -17,14 +17,15 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage("");
-    // 既存のセッションをクリア
-    await supabase.auth.signOut();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setMessage(error.message);
-      setLoading(false);
-      return;
-    }
+    try {
+      // 既存のセッションをクリア
+      await supabase.auth.signOut();
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setMessage(`ログインに失敗しました: ${error.message}`);
+        setLoading(false);
+        return;
+      }
     // セッションを再取得してトークンを確認
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -42,19 +43,34 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    setMessage("ログインしました。トップに戻ってください。");
-    router.push("/");
-    setLoading(false);
+      setMessage("ログインしました。トップに戻ってください。");
+      router.push("/");
+    } catch (e: any) {
+      console.error("Login error:", e);
+      setMessage(`ログインに失敗しました: ${e.message || "不明なエラー"}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // If already logged-in, skip this page
   useEffect(() => {
     const checkSession = async () => {
-      // まずセッションをクリアしてからチェック
-      await supabase.auth.signOut();
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
-        router.replace("/");
+      try {
+        // まずセッションをクリアしてからチェック
+        await supabase.auth.signOut();
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Session check error:", error);
+          // エラーがあっても続行（ログインページを表示）
+          return;
+        }
+        if (data.session?.user) {
+          router.replace("/");
+        }
+      } catch (e) {
+        console.error("Failed to check session:", e);
+        // エラーがあっても続行（ログインページを表示）
       }
     };
     checkSession();
@@ -64,13 +80,19 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage("");
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage("サインアップメールを送信しました。メールを確認してください。");
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setMessage(`サインアップに失敗しました: ${error.message}`);
+      } else {
+        setMessage("サインアップメールを送信しました。メールを確認してください。");
+      }
+    } catch (e: any) {
+      console.error("Signup error:", e);
+      setMessage(`サインアップに失敗しました: ${e.message || "不明なエラー"}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

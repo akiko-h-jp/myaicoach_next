@@ -19,16 +19,23 @@ export default function Home() {
   useEffect(() => {
     const fetchSession = async () => {
       setLoading(true);
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setError(error.message);
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          setError(error.message);
+          setSession(null);
+        } else {
+          setSession({
+            email: data.session?.user.email ?? null,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch session:", e);
+        setError("セッションの取得に失敗しました。環境変数の設定を確認してください。");
         setSession(null);
-      } else {
-        setSession({
-          email: data.session?.user.email ?? null,
-        });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     // run once on mount (supabase client is now singleton)
     fetchSession();
