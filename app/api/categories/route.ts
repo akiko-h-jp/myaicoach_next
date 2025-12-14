@@ -42,27 +42,59 @@ export async function POST(req: NextRequest) {
     }
 
     const name = typeof body?.name === "string" ? body.name.trim() : "";
-    const dailyLimitHours =
-      typeof body?.dailyLimitHours === "number" ? body.dailyLimitHours : null;
-    const weekendHolidayHours =
-      typeof body?.weekendHolidayHours === "number" ? body.weekendHolidayHours : null;
+    // 数値の変換: number型、または文字列として送られてきた数値を変換
+    let dailyLimitHours: number | null = null;
+    if (body?.dailyLimitHours !== undefined && body?.dailyLimitHours !== null && body?.dailyLimitHours !== "") {
+      const parsed = typeof body.dailyLimitHours === "number" 
+        ? body.dailyLimitHours 
+        : typeof body.dailyLimitHours === "string" 
+          ? parseFloat(body.dailyLimitHours) 
+          : null;
+      if (parsed !== null && !isNaN(parsed)) {
+        dailyLimitHours = parsed;
+      }
+    }
+    
+    let weekendHolidayHours: number | null = null;
+    if (body?.weekendHolidayHours !== undefined && body?.weekendHolidayHours !== null && body?.weekendHolidayHours !== "") {
+      const parsed = typeof body.weekendHolidayHours === "number" 
+        ? body.weekendHolidayHours 
+        : typeof body.weekendHolidayHours === "string" 
+          ? parseFloat(body.weekendHolidayHours) 
+          : null;
+      if (parsed !== null && !isNaN(parsed)) {
+        weekendHolidayHours = parsed;
+      }
+    }
 
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    console.log("POST /api/categories: Creating category for user:", user.id, "name:", name);
+    console.log("POST /api/categories: Creating category for user:", user.id, "name:", name, "dailyLimitHours:", dailyLimitHours, "weekendHolidayHours:", weekendHolidayHours);
 
-    const category = await prisma.category.create({
-      data: {
-        userId: user.id,
-        name,
-        dailyLimitHours,
-        weekendHolidayHours,
-      },
-    });
+    let category;
+    try {
+      category = await prisma.category.create({
+        data: {
+          userId: user.id,
+          name,
+          dailyLimitHours,
+          weekendHolidayHours,
+        },
+      });
+      console.log("POST /api/categories: Category created successfully:", category.id);
+    } catch (dbError: any) {
+      console.error("POST /api/categories: Database error:", {
+        message: dbError.message,
+        code: dbError.code,
+        meta: dbError.meta,
+        stack: dbError.stack,
+      });
+      // データベースエラーを再スローして、外側のcatchブロックで処理
+      throw dbError;
+    }
 
-    console.log("POST /api/categories: Category created successfully:", category.id);
     return NextResponse.json({ category }, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/categories error:", error);

@@ -118,11 +118,20 @@ export default function TasksPage() {
       },
     });
     if (!res.ok) {
-      setError(`取得に失敗しました (${res.status})`);
+      const errorText = await res.text().catch(() => "");
+      setError(`取得に失敗しました (${res.status})${errorText ? `: ${errorText}` : ""}`);
       return;
     }
     const json = await res.json();
-    setTasks(json.tasks ?? []);
+    const tasksList = json.tasks ?? [];
+    console.log(`📋 Fetched ${tasksList.length} tasks for current user`);
+    if (tasksList.length === 0) {
+      console.log("ℹ️ No tasks found. This could mean:");
+      console.log("  1. You're logged in with a different account than local");
+      console.log("  2. Local and Vercel are using different Supabase projects");
+      console.log("  3. Tasks were created in a different environment");
+    }
+    setTasks(tasksList);
   };
 
   const handleAdd = async () => {
