@@ -45,9 +45,11 @@ export default function SettingsPage() {
         router.replace("/login");
         return;
       }
-      setAccessToken(token);
-      await fetchCategories(token);
-      await fetchUserSetting(token);
+      // トークンをクリーンアップ（改行や余分な文字を削除）
+      const cleanToken = token.trim().split(/\s+/)[0];
+      setAccessToken(cleanToken);
+      await fetchCategories(cleanToken);
+      await fetchUserSetting(cleanToken);
       setLoading(false);
     };
     init();

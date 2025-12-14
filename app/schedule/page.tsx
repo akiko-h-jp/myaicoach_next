@@ -50,8 +50,10 @@ export default function SchedulePage() {
         router.replace("/login");
         return;
       }
-      setAccessToken(token);
-      await fetchSchedules(token);
+      // トークンをクリーンアップ（改行や余分な文字を削除）
+      const cleanToken = token.trim().split(/\s+/)[0];
+      setAccessToken(cleanToken);
+      await fetchSchedules(cleanToken);
       setLoading(false);
     };
     init();

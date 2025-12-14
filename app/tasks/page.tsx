@@ -78,9 +78,14 @@ export default function TasksPage() {
         router.replace("/login");
         return;
       }
-      setAccessToken(token);
-      await fetchCategories(token);
-      await fetchTasks(token);
+      // トークンをクリーンアップ（改行や余分な文字を削除）
+      const cleanToken = token.trim().split(/\s+/)[0];
+      if (cleanToken !== token) {
+        console.warn("Token had extra whitespace, cleaned:", cleanToken.substring(0, 20) + "...");
+      }
+      setAccessToken(cleanToken);
+      await fetchCategories(cleanToken);
+      await fetchTasks(cleanToken);
       setLoading(false);
     };
     init();

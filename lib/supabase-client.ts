@@ -12,7 +12,13 @@ let browserClient: SupabaseClient | null = null;
 export const supabaseBrowserClient = (): SupabaseClient => {
   // reuse singleton to avoid recreating client every render
   if (!browserClient) {
-    browserClient = createClient(supabaseUrl, supabaseAnonKey);
+    browserClient = createClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
   }
   return browserClient;
 };
