@@ -12,13 +12,15 @@ if (!connectionString) {
 // 接続文字列を正規化（前後の空白を削除）
 connectionString = connectionString.trim();
 
-// DATABASE_URLにsslmodeが含まれていない場合、追加
-// SupabaseのPostgreSQL接続にはSSLが必須
-if (!connectionString.includes("sslmode=")) {
-  // 既存のクエリパラメータがあるかチェック
-  const separator = connectionString.includes("?") ? "&" : "?";
-  connectionString = `${connectionString}${separator}sslmode=require`;
-  console.log("🔧 Added sslmode=require to DATABASE_URL");
+// DATABASE_URLのsslmode設定を調整
+// Supabaseの自己署名証明書を信頼するため、sslmode=preferを使用
+// または接続文字列からsslmodeを削除して、pgのPoolのSSL設定に任せる
+if (connectionString.includes("sslmode=")) {
+  // 既存のsslmode設定を削除（pgのPoolのSSL設定を使用するため）
+  connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, "");
+  // クエリパラメータが空になった場合、?を削除
+  connectionString = connectionString.replace(/\?$/, "");
+  console.log("🔧 Removed sslmode from DATABASE_URL (using pg Pool SSL config instead)");
 }
 
 // 接続タイムアウトを明示的に設定（Vercelのサーバーレス環境用）
@@ -90,8 +92,9 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
     
     console.log("🔌 Creating database connection pool", {
       hasSslModeInUrl: connectionString.includes("sslmode="),
-      hasExplicitSsl: !connectionString.includes("sslmode="),
+      hasExplicitSsl: true, // 常にpgのPoolのSSL設定を使用
       host: connectionString.match(/@([^:]+)/)?.[1] || "unknown",
+      sslConfig: poolConfig.ssl,
     });
     
     pool = new Pool(poolConfig);
