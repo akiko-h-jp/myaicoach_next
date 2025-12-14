@@ -38,9 +38,21 @@ const getEnvVarSafe = (key: string): string => {
 const supabaseUrl = getEnvVarSafe("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = getEnvVarSafe("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
+// デバッグ用: 環境変数が読み込まれているか確認（本番環境では表示されない）
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+  console.log("Environment variables check:", {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlLength: supabaseUrl?.length || 0,
+    keyLength: supabaseAnonKey?.length || 0,
+  });
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   if (typeof window !== "undefined") {
     console.error("Supabase environment variables are missing or invalid");
+    console.error("NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl ? "exists" : "missing");
+    console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY:", supabaseAnonKey ? "exists" : "missing");
   }
 }
 
