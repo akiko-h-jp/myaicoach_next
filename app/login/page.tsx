@@ -17,19 +17,39 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // 既存のセッションをクリア
+    await supabase.auth.signOut();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setMessage(error.message);
-    } else {
-      setMessage("ログインしました。トップに戻ってください。");
-      router.push("/");
+      setLoading(false);
+      return;
     }
+    // セッションを再取得してトークンを確認
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token || typeof token !== "string") {
+      setMessage("トークンの取得に失敗しました。再度お試しください。");
+      setLoading(false);
+      return;
+    }
+    // トークンに余分な文字が含まれていないか確認
+    const cleanToken = token.trim().split(/\s+/)[0];
+    if (cleanToken !== token) {
+      setMessage("トークンに問題があります。ブラウザのキャッシュをクリアしてください。");
+      setLoading(false);
+      return;
+    }
+    setMessage("ログインしました。トップに戻ってください。");
+    router.push("/");
     setLoading(false);
   };
 
   // If already logged-in, skip this page
   useEffect(() => {
     const checkSession = async () => {
+      // まずセッションをクリアしてからチェック
+      await supabase.auth.signOut();
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
         router.replace("/");
