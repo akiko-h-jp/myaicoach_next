@@ -16,13 +16,17 @@ export async function getUserFromRequest(req: NextRequest) {
     return null;
   }
 
-  // Bearer の後の部分を取得し、改行や余分な文字を削除
-  const token = authHeader.replace(/^Bearer\s+/, "").trim();
+  // Bearer の後の部分を取得
+  let token = authHeader.replace(/^Bearer\s+/, "").trim();
   
-  // トークンが空、または不正な形式（スペースや改行を含む）の場合は拒否
-  if (!token || token.includes(" ") || token.includes("\n") || token.includes("\r")) {
+  // JWTトークンの形式（3つの部分がドットで区切られている）のみを抽出
+  // これにより、環境変数などが混入していてもJWT形式の部分だけを取得できる
+  const jwtPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+  const match = token.match(jwtPattern);
+  if (!match) {
     return null;
   }
+  token = match[0];
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) {
