@@ -139,7 +139,11 @@ export default function SettingsPage() {
     });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      setError(json.error ?? `追加に失敗しました (${res.status})`);
+      const errorMsg = json.error ?? `追加に失敗しました (${res.status})`;
+      const details = json.details ? `: ${json.details}` : "";
+      const code = json.code ? ` [${json.code}]` : "";
+      console.error("Category creation failed:", { status: res.status, error: json.error, details: json.details, code: json.code, fullResponse: json });
+      setError(`${errorMsg}${details}${code}`);
       setPosting(false);
       return;
     }
