@@ -33,10 +33,12 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    // トークンに余分な文字が含まれていないか確認
-    const cleanToken = token.trim().split(/\s+/)[0];
-    if (cleanToken !== token) {
-      setMessage("トークンに問題があります。ブラウザのキャッシュをクリアしてください。");
+    // JWTトークンの形式（3つの部分がドットで区切られている）のみを抽出
+    const jwtPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+    const match = token.match(jwtPattern);
+    if (!match) {
+      setMessage("トークンの形式が不正です。ブラウザのキャッシュをクリアしてください。");
+      await supabase.auth.signOut();
       setLoading(false);
       return;
     }

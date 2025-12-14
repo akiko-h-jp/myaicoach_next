@@ -50,8 +50,16 @@ export default function SchedulePage() {
         router.replace("/login");
         return;
       }
-      // トークンをクリーンアップ（改行や余分な文字を削除）
-      const cleanToken = token.trim().split(/\s+/)[0];
+      // JWTトークンの形式（3つの部分がドットで区切られている）のみを抽出
+      const jwtPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+      const match = token.match(jwtPattern);
+      if (!match) {
+        setError("トークンの形式が不正です。再度ログインしてください。");
+        await supabase.auth.signOut();
+        router.replace("/login");
+        return;
+      }
+      const cleanToken = match[0];
       setAccessToken(cleanToken);
       await fetchSchedules(cleanToken);
       setLoading(false);
