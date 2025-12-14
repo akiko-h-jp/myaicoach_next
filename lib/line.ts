@@ -37,14 +37,24 @@ export async function sendLineNotification(message: string) {
   });
 
   try {
-    const res = await fetch(lineEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lineToken.trim()}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    // AbortControllerを使用してタイムアウトを設定（30秒）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    let res: Response;
+    try {
+      res = await fetch(lineEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${lineToken.trim()}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     
     const responseText = await res.text();
     console.log("📥 LINE API response:", {
@@ -65,11 +75,34 @@ export async function sendLineNotification(message: string) {
     console.log("✅ LINE notification sent successfully");
     return { ok: true };
   } catch (e: any) {
-    console.error("❌ LINE notification error:", {
+    // より詳細なエラー情報をログに記録
+    const errorDetails: any = {
       message: e.message,
-      stack: e.stack,
-    });
-    return { ok: false, error: `LINE notification error: ${e.message}` };
+      name: e.name,
+      code: e.code,
+    };
+    
+    if (e.name === "AbortError") {
+      errorDetails.reason = "Request timeout (30 seconds)";
+    }
+    
+    if (e.cause) {
+      errorDetails.cause = e.cause;
+    }
+    
+    console.error("❌ LINE notification error:", errorDetails);
+    
+    // より詳細なエラーメッセージを返す
+    let errorMessage = `LINE notification error: ${e.message}`;
+    if (e.name === "AbortError") {
+      errorMessage = "LINE notification error: Request timeout. Please check network connectivity.";
+    } else if (e.code === "ENOTFOUND" || e.code === "ECONNREFUSED") {
+      errorMessage = `LINE notification error: Cannot connect to LINE API (${e.code}). Please check network settings.`;
+    } else if (e.message?.includes("fetch failed")) {
+      errorMessage = `LINE notification error: Network error (${e.message}). This may be due to Vercel's network restrictions or LINE API connectivity issues.`;
+    }
+    
+    return { ok: false, error: errorMessage };
   }
 }
 
