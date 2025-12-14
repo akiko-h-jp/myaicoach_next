@@ -52,36 +52,54 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
 } else {
   // 新しい接続プールとアダプターを作成
   try {
-    // SSL接続を強制（Supabaseでは必須）
+    // Vercelのサーバーレス環境では、接続プールの設定を最小限に
+    // SSL設定は接続文字列のsslmode=requireで処理される
     const poolConfig: any = {
       connectionString,
       max: 1, // サーバーレス環境では接続数を最小限に
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 20000, // タイムアウトを延長（20秒）
-      // SSL設定を明示的に指定（Supabaseでは必須）
-      ssl: {
-        rejectUnauthorized: false, // Supabaseの証明書を信頼
-      },
+      min: 0, // 最小接続数を0に設定（コールドスタート時の接続を防ぐ）
+      idleTimeoutMillis: 20000, // アイドルタイムアウトを短く設定
+      connectionTimeoutMillis: 10000, // 接続タイムアウトを10秒に設定
+      // 接続文字列にsslmodeが含まれている場合、pgのPoolのssl設定は不要
+      // 含まれていない場合のみ、明示的にSSL設定を追加
+      ...(connectionString.includes("sslmode=") 
+        ? {} 
+        : {
+            ssl: {
+              rejectUnauthorized: false, // Supabaseの証明書を信頼
+            },
+          }
+      ),
     };
     
-    console.log("🔌 Creating database connection pool with SSL enabled");
+    console.log("🔌 Creating database connection pool", {
+      hasSslModeInUrl: connectionString.includes("sslmode="),
+      hasExplicitSsl: !connectionString.includes("sslmode="),
+      host: connectionString.match(/@([^:]+)/)?.[1] || "unknown",
+    });
     
     pool = new Pool(poolConfig);
     adapter = new PrismaPg(pool);
     
-    // 接続をテスト
+    // グローバル変数に保存（再利用のため）
+    globalForPrisma.pool = pool;
+    globalForPrisma.adapter = adapter;
+    
+    // 接続エラーのハンドリングを追加
+    pool.on("error", (err: Error) => {
+      console.error("❌ Unexpected error on idle database client:", err);
+    });
+    
+    // 接続をテスト（非同期、エラーはログのみ）
     pool.query("SELECT 1")
       .then(() => {
         console.log("✅ Database connection test successful");
       })
       .catch((err: any) => {
         console.error("❌ Database connection test failed:", err.message);
+        console.error("Error code:", err.code);
         console.error("Connection string host:", connectionString.match(/@([^:]+)/)?.[1] || "unknown");
       });
-    
-    // グローバル変数に保存（再利用のため）
-    globalForPrisma.pool = pool;
-    globalForPrisma.adapter = adapter;
   } catch (error: any) {
     console.error("❌ Failed to create Prisma adapter:", error.message);
     throw new Error(`Failed to initialize database connection: ${error.message}`);
@@ -98,18 +116,5 @@ export const prisma =
 
 if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = prisma;
-  
-  // 初期化時に接続をテスト（サーバーレス環境では初回リクエスト時のみ実行）
-  if (process.env.NODE_ENV === "production") {
-    // 非同期で接続をテスト（エラーはログに記録するだけ）
-    prisma.$connect()
-      .then(() => {
-        console.log("✅ Prisma client connected successfully");
-      })
-      .catch((error: any) => {
-        console.error("❌ Prisma client connection failed:", error.message);
-        console.error("Connection string preview:", connectionString.substring(0, 20) + "...");
-      });
-  }
 }
 
