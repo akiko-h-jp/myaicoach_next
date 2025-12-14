@@ -81,16 +81,11 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
       min: 0, // 最小接続数を0に設定（コールドスタート時の接続を防ぐ）
       idleTimeoutMillis: 30000, // アイドルタイムアウトを30秒に設定
       connectionTimeoutMillis: 30000, // 接続タイムアウトを30秒に延長（Vercelのサーバーレス環境用）
-      // 接続文字列にsslmodeが含まれている場合、pgのPoolのssl設定は不要
-      // 含まれていない場合のみ、明示的にSSL設定を追加
-      ...(connectionString.includes("sslmode=") 
-        ? {} 
-        : {
-            ssl: {
-              rejectUnauthorized: false, // Supabaseの証明書を信頼
-            },
-          }
-      ),
+      // Supabaseの証明書を信頼する設定（P1011エラーを回避）
+      // 接続文字列のsslmode設定に関係なく、明示的にSSL設定を追加
+      ssl: {
+        rejectUnauthorized: false, // Supabaseの自己署名証明書を信頼
+      },
     };
     
     console.log("🔌 Creating database connection pool", {
