@@ -18,7 +18,10 @@ const lineEndpointRaw = process.env.LINE_PUSH_ENDPOINT;
 
 const lineToken = cleanEnvVar(lineTokenRaw);
 const lineUserId = cleanEnvVar(lineUserIdRaw);
-const lineEndpoint = cleanEnvVar(lineEndpointRaw) || "https://api.line.me/v2/bot/message/push";
+// LINE_PUSH_ENDPOINTはオプション（デフォルト値を使用）
+const lineEndpoint = lineEndpointRaw 
+  ? cleanEnvVar(lineEndpointRaw) 
+  : "https://api.line.me/v2/bot/message/push";
 
 export async function sendLineNotification(message: string) {
   console.log("📤 Attempting to send LINE notification...");
