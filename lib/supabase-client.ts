@@ -35,24 +35,34 @@ const getEnvVarSafe = (key: string): string => {
   }
 };
 
-const supabaseUrl = getEnvVarSafe("NEXT_PUBLIC_SUPABASE_URL");
-const supabaseAnonKey = getEnvVarSafe("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+// 環境変数を直接取得（ビルド時に埋め込まれる）
+const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKeyRaw = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// デバッグ用: 環境変数が読み込まれているか確認（本番環境では表示されない）
-if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-  console.log("Environment variables check:", {
-    hasUrl: !!supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-    urlLength: supabaseUrl?.length || 0,
-    keyLength: supabaseAnonKey?.length || 0,
+// クリーンアップ処理
+const supabaseUrl = supabaseUrlRaw ? getEnvVarSafe("NEXT_PUBLIC_SUPABASE_URL") : "";
+const supabaseAnonKey = supabaseAnonKeyRaw ? getEnvVarSafe("NEXT_PUBLIC_SUPABASE_ANON_KEY") : "";
+
+// デバッグ用: 環境変数が読み込まれているか確認（常に表示）
+if (typeof window !== "undefined") {
+  console.log("🔍 Environment variables check:", {
+    rawUrl: supabaseUrlRaw ? `exists (${supabaseUrlRaw.length} chars)` : "missing",
+    rawKey: supabaseAnonKeyRaw ? `exists (${supabaseAnonKeyRaw.length} chars)` : "missing",
+    cleanedUrl: supabaseUrl ? `exists (${supabaseUrl.length} chars)` : "missing",
+    cleanedKey: supabaseAnonKey ? `exists (${supabaseAnonKey.length} chars)` : "missing",
   });
-}
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  if (typeof window !== "undefined") {
-    console.error("Supabase environment variables are missing or invalid");
-    console.error("NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl ? "exists" : "missing");
-    console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY:", supabaseAnonKey ? "exists" : "missing");
+  
+  if (!supabaseUrlRaw || !supabaseAnonKeyRaw) {
+    console.error("❌ Environment variables are missing at build time!");
+    console.error("This means the variables were not set in Vercel when the build ran.");
+    console.error("Please:");
+    console.error("1. Check Vercel → Settings → Environment Variables");
+    console.error("2. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set");
+    console.error("3. Ensure they are enabled for Production environment");
+    console.error("4. Redeploy with cache cleared");
+  } else if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("⚠️ Environment variables exist but were cleaned to empty strings");
+    console.error("This might indicate the values contain unexpected characters");
   }
 }
 
