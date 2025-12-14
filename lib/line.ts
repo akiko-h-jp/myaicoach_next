@@ -29,11 +29,15 @@ export async function sendLineNotification(message: string) {
     ],
   };
 
+  // 環境変数の状態をログに記録（デバッグ用）
   console.log("📤 LINE notification payload:", {
     endpoint: lineEndpoint,
     userId: lineUserId.trim().substring(0, 10) + "...",
     messageLength: message.length,
     hasToken: !!lineToken,
+    tokenLength: lineToken?.length || 0,
+    userIdLength: lineUserId?.length || 0,
+    tokenPrefix: lineToken?.substring(0, 10) + "..." || "not set",
   });
 
   try {
@@ -43,6 +47,12 @@ export async function sendLineNotification(message: string) {
     
     let res: Response;
     try {
+      console.log("🌐 Attempting to fetch LINE API:", {
+        url: lineEndpoint,
+        method: "POST",
+        hasAuthHeader: !!lineToken,
+      });
+      
       res = await fetch(lineEndpoint, {
         method: "POST",
         headers: {
@@ -52,6 +62,17 @@ export async function sendLineNotification(message: string) {
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
+      
+      console.log("✅ Fetch completed, status:", res.status);
+    } catch (fetchError: any) {
+      console.error("❌ Fetch error caught:", {
+        message: fetchError.message,
+        name: fetchError.name,
+        code: fetchError.code,
+        cause: fetchError.cause,
+        stack: fetchError.stack,
+      });
+      throw fetchError;
     } finally {
       clearTimeout(timeoutId);
     }
