@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
 
     let category;
     try {
+      console.log("POST /api/categories: Attempting to create category...");
       category = await prisma.category.create({
         data: {
           userId: user.id,
@@ -90,7 +91,18 @@ export async function POST(req: NextRequest) {
         code: dbError.code,
         meta: dbError.meta,
         stack: dbError.stack,
+        errorName: dbError.name,
       });
+      
+      // P1001エラー（接続エラー）の場合、より詳細な情報を提供
+      if (dbError.code === "P1001") {
+        console.error("❌ Database connection error (P1001):");
+        console.error("   - This usually means the database server is unreachable");
+        console.error("   - Check if DATABASE_URL is correct in Vercel environment variables");
+        console.error("   - Verify Supabase project is active and accessible");
+        console.error("   - Check network connectivity from Vercel to Supabase");
+      }
+      
       // データベースエラーを再スローして、外側のcatchブロックで処理
       throw dbError;
     }

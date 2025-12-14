@@ -21,6 +21,13 @@ if (!connectionString.includes("sslmode=")) {
   console.log("🔧 Added sslmode=require to DATABASE_URL");
 }
 
+// 接続タイムアウトを明示的に設定（Vercelのサーバーレス環境用）
+if (!connectionString.includes("connect_timeout=")) {
+  const separator = connectionString.includes("?") ? "&" : "?";
+  connectionString = `${connectionString}${separator}connect_timeout=30`;
+  console.log("🔧 Added connect_timeout=30 to DATABASE_URL");
+}
+
 // 接続文字列の形式を検証
 if (!connectionString.startsWith("postgresql://") && !connectionString.startsWith("postgres://")) {
   console.error("❌ Invalid DATABASE_URL format. Expected postgresql:// or postgres://");
@@ -58,8 +65,8 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
       connectionString,
       max: 1, // サーバーレス環境では接続数を最小限に
       min: 0, // 最小接続数を0に設定（コールドスタート時の接続を防ぐ）
-      idleTimeoutMillis: 20000, // アイドルタイムアウトを短く設定
-      connectionTimeoutMillis: 10000, // 接続タイムアウトを10秒に設定
+      idleTimeoutMillis: 30000, // アイドルタイムアウトを30秒に設定
+      connectionTimeoutMillis: 30000, // 接続タイムアウトを30秒に延長（Vercelのサーバーレス環境用）
       // 接続文字列にsslmodeが含まれている場合、pgのPoolのssl設定は不要
       // 含まれていない場合のみ、明示的にSSL設定を追加
       ...(connectionString.includes("sslmode=") 
@@ -88,6 +95,24 @@ if (globalForPrisma.pool && globalForPrisma.adapter) {
     // 接続エラーのハンドリングを追加
     pool.on("error", (err: Error) => {
       console.error("❌ Unexpected error on idle database client:", err);
+      console.error("Error details:", {
+        message: err.message,
+        code: (err as any).code,
+        stack: err.stack,
+      });
+    });
+    
+    // 接続イベントのログを追加（デバッグ用）
+    pool.on("connect", () => {
+      console.log("✅ New database connection established");
+    });
+    
+    pool.on("acquire", () => {
+      console.log("📥 Connection acquired from pool");
+    });
+    
+    pool.on("release", () => {
+      console.log("📤 Connection released to pool");
     });
     
     // ビルド時（静的生成時）には接続テストを実行しない
