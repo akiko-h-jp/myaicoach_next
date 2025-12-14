@@ -34,11 +34,25 @@ if (!connectionString.startsWith("postgresql://") && !connectionString.startsWit
   throw new Error("DATABASE_URL must start with postgresql:// or postgres://");
 }
 
+// 接続プーラー経由かどうかをチェック
+const isUsingPooler = connectionString.includes("pooler.supabase.com") || 
+                      connectionString.includes(":6543"); // 接続プーラーのポート
+
 console.log("🔍 DATABASE_URL format check:", {
   hasSslMode: connectionString.includes("sslmode="),
   startsWithPostgres: connectionString.startsWith("postgres"),
   hostPreview: connectionString.match(/@([^:]+)/)?.[1] || "unknown",
+  isUsingPooler: isUsingPooler,
+  port: connectionString.match(/:(\d+)/)?.[1] || "unknown",
 });
+
+// 接続プーラーを使用していない場合、警告を表示
+if (!isUsingPooler && process.env.VERCEL) {
+  console.warn("⚠️  WARNING: Not using Supabase connection pooler!");
+  console.warn("   For Vercel serverless, connection pooler is recommended.");
+  console.warn("   Use connection string from: Supabase Dashboard → Settings → Database → Connection Pooling");
+  console.warn("   Format: postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres");
+}
 
 // サーバーレス環境での接続プール管理を改善
 // Vercelなどのサーバーレス環境では、グローバル変数を使用して接続を再利用
