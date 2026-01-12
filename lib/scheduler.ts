@@ -56,9 +56,6 @@ function compareDatesOnly(date1: Date, date2: Date): number {
   return d1.getTime() - d2.getTime();
 }
 
-// 最小スケジュール単位（0.5時間）
-const MIN_SLOT_HOURS = 0.5;
-
 function calcTaskScore(task: ScheduleInputTask, categorySetting?: CategorySetting) {
   let score = 0;
 
