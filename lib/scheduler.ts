@@ -37,6 +37,20 @@ function getDailyLimit(date: Date, base?: number | null, weekendHoliday?: number
   return base ?? 0;
 }
 
+// 日付のみに正規化（時刻を00:00:00に設定）
+function normalizeDate(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// 日付のみで比較（時刻を無視）
+function compareDatesOnly(date1: Date, date2: Date): number {
+  const d1 = normalizeDate(date1);
+  const d2 = normalizeDate(date2);
+  return d1.getTime() - d2.getTime();
+}
+
 function calcTaskScore(task: ScheduleInputTask, categorySetting?: CategorySetting) {
   let score = 0;
 
@@ -102,13 +116,32 @@ export function scheduleTasksRuleBased(
   };
 
   for (const { task } of scored) {
+    // task.estimatedHoursは既にroute.tsで計算された残り時間（進捗を考慮済み）
     let remaining = Math.max(0, task.estimatedHours);
-    const deadline = task.dueDate ? new Date(task.dueDate) : new Date(start.getTime() + 7 * 86400000);
-    if (deadline < start) deadline.setTime(start.getTime());
+    
+    // 締切日の処理
+    // dueDateがある場合はその日まで、ない場合は開始日から7日後まで
+    const normalizedStart = normalizeDate(start);
+    let deadline: Date;
+    if (task.dueDate) {
+      deadline = normalizeDate(task.dueDate);
+      // 締切日が開始日より前の場合でも、締切日をそのまま使用（緊急度が高いため）
+      // ただし、開始日より前の日にはスケジュールしない
+      if (compareDatesOnly(deadline, normalizedStart) < 0) {
+        deadline = new Date(normalizedStart);
+      }
+    } else {
+      // 締切日がない場合は開始日から7日後
+      deadline = new Date(normalizedStart);
+      deadline.setDate(deadline.getDate() + 7);
+    }
 
-    let cursor = new Date(start);
+    // 開始日から締切日まで、残り時間を割り当て
+    let cursor = new Date(normalizedStart);
     let guard = 0;
-    while (remaining > 0 && cursor <= deadline && guard < 365) {
+    const maxDays = 365; // 無限ループ防止
+    
+    while (remaining > 0 && compareDatesOnly(cursor, deadline) <= 0 && guard < maxDays) {
       const bucket = getDayBucket(cursor, task.categoryName);
       const assign = Math.min(remaining, bucket.remaining);
       if (assign > 0) {
@@ -123,6 +156,14 @@ export function scheduleTasksRuleBased(
       }
       cursor.setDate(cursor.getDate() + 1);
       guard++;
+    }
+    
+    // 締切日を超えても残り時間がある場合は警告ログ（デバッグ用）
+    if (remaining > 0 && guard < maxDays) {
+      console.warn(
+        `Task "${task.title}" (ID: ${task.id}) could not be fully scheduled. ` +
+        `Remaining: ${remaining}h, Deadline: ${deadline.toISOString().slice(0, 10)}`
+      );
     }
   }
 
