@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           ? Math.max(0, t.estimatedHours * (1 - (t.progress ?? 0) / 100))
           : 0;
       if (remaining <= 0) return null;
-      return {
+      const task: ScheduleInputTask = {
         id: t.id,
         title: t.title,
         categoryName: t.category?.name ?? null,
@@ -47,6 +47,17 @@ export async function POST(req: NextRequest) {
         priority: t.priority ?? TaskPriority.NONE,
         progress: t.progress ?? 0,
       };
+      // デバッグログ: タスク情報を出力
+      console.log(`📋 Task: "${task.title}"`, {
+        id: task.id,
+        estimatedHours: task.estimatedHours,
+        originalEstimatedHours: t.estimatedHours,
+        progress: task.progress,
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
+        priority: task.priority,
+        category: task.categoryName,
+      });
+      return task;
     })
     .filter((x): x is ScheduleInputTask => x !== null);
 
@@ -73,6 +84,12 @@ export async function POST(req: NextRequest) {
   }));
 
   const start = startOfDay(new Date());
+  console.log(`🚀 Starting schedule generation:`, {
+    taskCount: inputTasks.length,
+    weekdayDefault,
+    weekendDefault,
+    startDate: start.toISOString().slice(0, 10),
+  });
   const schedule = scheduleTasksRuleBased(
     inputTasks,
     catSettings,
@@ -80,6 +97,15 @@ export async function POST(req: NextRequest) {
     weekendDefault,
     start
   );
+  console.log(`✅ Schedule generated:`, {
+    totalEntries: schedule.length,
+    totalHours: schedule.reduce((sum, s) => sum + s.scheduledHours, 0),
+    byDate: schedule.reduce((acc, s) => {
+      const key = s.date.toISOString().slice(0, 10);
+      acc[key] = (acc[key] || 0) + s.scheduledHours;
+      return acc;
+    }, {} as Record<string, number>),
+  });
 
   // 今日以降のスケジュールを削除し、新しく挿入
   await prisma.scheduleEntry.deleteMany({

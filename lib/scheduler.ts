@@ -78,9 +78,10 @@ function calcTaskScore(task: ScheduleInputTask, categorySetting?: CategorySettin
 }
 
 /**
- * ルールベーススケジューラ（デフォルト）
+ * ルールベーススケジューラ（改善版）
  * - 締切と優先度でスコアリング
  * - 1日上限時間を超えないように割付
+ * - 複数タスクを均等に配置
  * - estimatedHours は残作業時間として扱う想定
  */
 export function scheduleTasksRuleBased(
@@ -91,16 +92,41 @@ export function scheduleTasksRuleBased(
   startDate?: Date
 ): ScheduleResult[] {
   const start = startDate ? new Date(startDate) : new Date();
+  const normalizedStart = normalizeDate(start);
   const catMap = new Map(categories.map((c) => [c.name, c]));
 
+  // タスクをスコア順にソート
   const scored: ScoreTask[] = tasks.map((t) => {
     const cs = t.categoryName ? catMap.get(t.categoryName) : undefined;
     return { task: t, score: calcTaskScore(t, cs) };
   });
   scored.sort((a, b) => b.score - a.score);
 
-  const daily: Record<string, { remaining: number; entries: ScheduleResult[] }> = {};
+  // 各タスクの締切日を計算
+  const taskDeadlines = new Map<string, Date>();
+  for (const { task } of scored) {
+    let deadline: Date;
+    if (task.dueDate) {
+      deadline = normalizeDate(task.dueDate);
+      // 締切日が開始日より前の場合は開始日に設定
+      if (compareDatesOnly(deadline, normalizedStart) < 0) {
+        deadline = new Date(normalizedStart);
+      }
+    } else {
+      // 締切日がない場合は開始日から7日後
+      deadline = new Date(normalizedStart);
+      deadline.setDate(deadline.getDate() + 7);
+    }
+    taskDeadlines.set(task.id, deadline);
+  }
 
+  // 最大締切日を計算（スケジュール範囲の終了日）
+  const maxDeadline = Array.from(taskDeadlines.values()).reduce((max, d) => {
+    return compareDatesOnly(d, max) > 0 ? d : max;
+  }, normalizedStart);
+
+  // 日ごとのバケットを初期化
+  const daily: Record<string, { remaining: number; entries: ScheduleResult[] }> = {};
   const getDayBucket = (d: Date, catName?: string | null) => {
     const key = d.toISOString().slice(0, 10);
     if (!daily[key]) {
@@ -115,54 +141,102 @@ export function scheduleTasksRuleBased(
     return daily[key];
   };
 
+  // 各タスクの残り時間を管理
+  const taskRemaining = new Map<string, number>();
   for (const { task } of scored) {
-    // task.estimatedHoursは既にroute.tsで計算された残り時間（進捗を考慮済み）
-    let remaining = Math.max(0, task.estimatedHours);
-    
-    // 締切日の処理
-    // dueDateがある場合はその日まで、ない場合は開始日から7日後まで
-    const normalizedStart = normalizeDate(start);
-    let deadline: Date;
-    if (task.dueDate) {
-      deadline = normalizeDate(task.dueDate);
-      // 締切日が開始日より前の場合でも、締切日をそのまま使用（緊急度が高いため）
-      // ただし、開始日より前の日にはスケジュールしない
-      if (compareDatesOnly(deadline, normalizedStart) < 0) {
-        deadline = new Date(normalizedStart);
-      }
-    } else {
-      // 締切日がない場合は開始日から7日後
-      deadline = new Date(normalizedStart);
-      deadline.setDate(deadline.getDate() + 7);
+    taskRemaining.set(task.id, Math.max(0, task.estimatedHours));
+  }
+
+  // 均等配置アルゴリズム: 日ごとに、利用可能なタスクから均等に割り当て
+  let cursor = new Date(normalizedStart);
+  const maxDays = 365;
+  let guard = 0;
+
+  while (guard < maxDays && compareDatesOnly(cursor, maxDeadline) <= 0) {
+    // この日にスケジュール可能なタスクを取得（締切日がこの日以降で、残り時間があるタスク）
+    const availableTasks = scored
+      .filter(({ task }) => {
+        const remaining = taskRemaining.get(task.id) ?? 0;
+        const deadline = taskDeadlines.get(task.id)!;
+        return (
+          remaining > 0 &&
+          compareDatesOnly(cursor, deadline) <= 0
+        );
+      })
+      .map(({ task }) => task);
+
+    if (availableTasks.length === 0) {
+      // スケジュール可能なタスクがない場合は次の日へ
+      cursor.setDate(cursor.getDate() + 1);
+      guard++;
+      continue;
     }
 
-    // 開始日から締切日まで、残り時間を割り当て
-    let cursor = new Date(normalizedStart);
-    let guard = 0;
-    const maxDays = 365; // 無限ループ防止
-    
-    while (remaining > 0 && compareDatesOnly(cursor, deadline) <= 0 && guard < maxDays) {
+    // この日に各タスクを均等に割り当て
+    for (const task of availableTasks) {
+      const remaining = taskRemaining.get(task.id) ?? 0;
+      if (remaining <= 0) continue;
+
       const bucket = getDayBucket(cursor, task.categoryName);
-      const assign = Math.min(remaining, bucket.remaining);
-      if (assign > 0) {
+      if (bucket.remaining <= 0) continue;
+
+      // 1日の上限時間を考慮して、均等に割り当て
+      // 複数タスクがある場合、1日の上限時間をタスク数で割った分を目安にする
+      const avgPerTask = bucket.remaining / availableTasks.length;
+      const assign = Math.min(remaining, avgPerTask, bucket.remaining);
+
+      if (assign > 0.01) {
+        // 0.01時間（36秒）以上の割り当てのみ追加
+        const roundedAssign = Math.round(assign * 100) / 100;
         bucket.entries.push({
           date: new Date(cursor),
           taskId: task.id,
-          scheduledHours: Math.round(assign * 100) / 100,
+          scheduledHours: roundedAssign,
           categoryName: task.categoryName,
         });
-        bucket.remaining -= assign;
-        remaining -= assign;
+        bucket.remaining -= roundedAssign;
+        taskRemaining.set(task.id, remaining - roundedAssign);
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+    guard++;
+  }
+
+  // まだ残り時間があるタスクがある場合、締切日までに確実に割り当てる
+  for (const { task } of scored) {
+    let remaining = taskRemaining.get(task.id) ?? 0;
+    if (remaining <= 0) continue;
+
+    const deadline = taskDeadlines.get(task.id)!;
+    let cursor = new Date(normalizedStart);
+    guard = 0;
+
+    while (remaining > 0 && guard < maxDays && compareDatesOnly(cursor, deadline) <= 0) {
+      const bucket = getDayBucket(cursor, task.categoryName);
+      const assign = Math.min(remaining, bucket.remaining);
+      if (assign > 0.01) {
+        const roundedAssign = Math.round(assign * 100) / 100;
+        bucket.entries.push({
+          date: new Date(cursor),
+          taskId: task.id,
+          scheduledHours: roundedAssign,
+          categoryName: task.categoryName,
+        });
+        bucket.remaining -= roundedAssign;
+        remaining -= roundedAssign;
+        taskRemaining.set(task.id, remaining);
       }
       cursor.setDate(cursor.getDate() + 1);
       guard++;
     }
-    
-    // 締切日を超えても残り時間がある場合は警告ログ（デバッグ用）
-    if (remaining > 0 && guard < maxDays) {
+
+    // 締切日を超えても残り時間がある場合は警告
+    const finalRemaining = taskRemaining.get(task.id) ?? 0;
+    if (finalRemaining > 0) {
       console.warn(
         `Task "${task.title}" (ID: ${task.id}) could not be fully scheduled. ` +
-        `Remaining: ${remaining}h, Deadline: ${deadline.toISOString().slice(0, 10)}`
+        `Remaining: ${finalRemaining}h, Deadline: ${deadline.toISOString().slice(0, 10)}`
       );
     }
   }
