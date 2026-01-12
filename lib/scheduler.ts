@@ -30,6 +30,11 @@ type ScoreTask = {
   score: number;
 };
 
+// スケジューリングの最小単位（0.5h単位で丸める）
+const MIN_SLOT_HOURS = 0.5;
+// 丸め後にこれ未満なら割り当てをスキップ
+const SMALL_THRESHOLD = 0.25;
+
 function getDailyLimit(date: Date, base?: number | null, weekendHoliday?: number | null) {
   if (isWeekendOrHoliday(date) && weekendHoliday != null) {
     return weekendHoliday;
@@ -50,6 +55,9 @@ function compareDatesOnly(date1: Date, date2: Date): number {
   const d2 = normalizeDate(date2);
   return d1.getTime() - d2.getTime();
 }
+
+// 最小スケジュール単位（0.5時間）
+const MIN_SLOT_HOURS = 0.5;
 
 function calcTaskScore(task: ScheduleInputTask, categorySetting?: CategorySetting) {
   let score = 0;
@@ -172,26 +180,37 @@ export function scheduleTasksRuleBased(
       continue;
     }
 
-    // この日に各タスクを均等に割り当て
+    // この日に各タスクを均等に割り当て（0.5h単位）
     for (const task of availableTasks) {
       const remaining = taskRemaining.get(task.id) ?? 0;
-      if (remaining <= 0) continue;
+      if (remaining < MIN_SLOT_HOURS) continue; // 0.5h未満はスキップ
 
       const bucket = getDayBucket(cursor, task.categoryName);
-      if (bucket.remaining <= 0) continue;
+      if (bucket.remaining < MIN_SLOT_HOURS) continue; // 0.5h未満の余裕しかない場合はスキップ
 
       // 1日の上限時間を考慮して、均等に割り当て
       // 複数タスクがある場合、1日の上限時間をタスク数で割った分を目安にする
       const avgPerTask = bucket.remaining / availableTasks.length;
-      const assign = Math.min(remaining, avgPerTask, bucket.remaining);
+      const baseAssign = Math.min(remaining, avgPerTask, bucket.remaining);
+      
+      // 0.5h単位で丸める（切り捨て）
+      let roundedAssign = Math.floor(baseAssign * 2) / 2;
+      
+      // 0.5h未満になった場合は、残り時間とバケットの余裕があれば0.5hに設定
+      if (roundedAssign < MIN_SLOT_HOURS) {
+        if (remaining >= MIN_SLOT_HOURS && bucket.remaining >= MIN_SLOT_HOURS) {
+          roundedAssign = MIN_SLOT_HOURS;
+        } else {
+          continue; // 0.5h割り当てできない場合はスキップ
+        }
+      }
 
-      if (assign > 0.01) {
-        // 0.01時間（36秒）以上の割り当てのみ追加
-        const roundedAssign = Math.round(assign * 100) / 100;
+      // 0.5h以上割り当て可能な場合のみ追加
+      if (roundedAssign >= MIN_SLOT_HOURS) {
         bucket.entries.push({
           date: new Date(cursor),
           taskId: task.id,
-          scheduledHours: roundedAssign,
+          scheduledHours: Math.round(roundedAssign * 100) / 100, // 小数点第2位まで
           categoryName: task.categoryName,
         });
         bucket.remaining -= roundedAssign;
@@ -203,24 +222,45 @@ export function scheduleTasksRuleBased(
     guard++;
   }
 
-  // まだ残り時間があるタスクがある場合、締切日までに確実に割り当てる
+  // まだ残り時間があるタスクがある場合、締切日までに確実に割り当てる（0.5h単位）
   for (const { task } of scored) {
     let remaining = taskRemaining.get(task.id) ?? 0;
-    if (remaining <= 0) continue;
+    if (remaining < MIN_SLOT_HOURS) continue; // 0.5h未満はスキップ
 
     const deadline = taskDeadlines.get(task.id)!;
     let cursor = new Date(normalizedStart);
     guard = 0;
 
-    while (remaining > 0 && guard < maxDays && compareDatesOnly(cursor, deadline) <= 0) {
+    while (remaining >= MIN_SLOT_HOURS && guard < maxDays && compareDatesOnly(cursor, deadline) <= 0) {
       const bucket = getDayBucket(cursor, task.categoryName);
-      const assign = Math.min(remaining, bucket.remaining);
-      if (assign > 0.01) {
-        const roundedAssign = Math.round(assign * 100) / 100;
+      if (bucket.remaining < MIN_SLOT_HOURS) {
+        // この日は0.5h未満の余裕しかない場合は次の日へ
+        cursor.setDate(cursor.getDate() + 1);
+        guard++;
+        continue;
+      }
+
+      // 0.5h単位で割り当て
+      const baseAssign = Math.min(remaining, bucket.remaining);
+      // 0.5h単位で切り捨て
+      let roundedAssign = Math.floor(baseAssign * 2) / 2;
+      
+      // 0.5h未満になった場合は、残り時間とバケットの余裕があれば0.5hに設定
+      if (roundedAssign < MIN_SLOT_HOURS) {
+        if (remaining >= MIN_SLOT_HOURS && bucket.remaining >= MIN_SLOT_HOURS) {
+          roundedAssign = MIN_SLOT_HOURS;
+        } else {
+          cursor.setDate(cursor.getDate() + 1);
+          guard++;
+          continue;
+        }
+      }
+
+      if (roundedAssign >= MIN_SLOT_HOURS) {
         bucket.entries.push({
           date: new Date(cursor),
           taskId: task.id,
-          scheduledHours: roundedAssign,
+          scheduledHours: Math.round(roundedAssign * 100) / 100,
           categoryName: task.categoryName,
         });
         bucket.remaining -= roundedAssign;
